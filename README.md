@@ -26,7 +26,7 @@ Upon receiving the message, the PrimeStream lazily computes the primes up to the
 #### Usage
 At the project root:  
 `./gradlew runJar`  
-Use curl or browser or Postman to test at http://localhost:8080/primes/[integer to test]  
+Use curl or browser or Postman to test at [http://localhost:8080/primes/5](http://localhost:8080/primes/5)
 
 To run the test:  
 `./gradlew test`

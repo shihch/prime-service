@@ -20,8 +20,8 @@ GET: /prime/8
 #### Design
 The akka-http service get a request with an integer and send ask message to PrimeCach actor.  
 The PrimeCache actor check if all the primes up to that integer are in the cache.  
-If yes then respond, if not, PrimeCache messages PrimeStream to perform the task and in the mean time it checks if the integer is a prime then reply.  
-Upon receiving the message, the PrimeStream lazily computes the primes up to the given integer then send data to PrimeCache to update the cache.  
+If yes then asks PrimeStream for the data, if not, PrimeCache asks PrimeStream to check if number is a prime and sends PrimeStream to perform the task in the background.  
+Upon receiving the message, the PrimeStream lazily computes the primes up to the given integer then send largest integer checked so far to PrimeCache.  
 
 #### Usage
 At the project root:  

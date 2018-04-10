@@ -3,6 +3,10 @@ package org.clark
 import akka.actor.Actor
 import akka.actor.ActorLogging
 import akka.actor.Props
+import akka.util.Timeout
+import scala.concurrent.duration._
+import akka.pattern.{ask,pipe}
+import scala.util.Success
 
 /**
  * Actor to respond prime service, send prime number computing task to PrimeStream
@@ -11,48 +15,20 @@ import akka.actor.Props
 class PrimeCache extends Actor with ActorLogging {
 
   val pst = context.actorOf(Props[PrimeStream], "primeActor")
-  private var cache = Cache(2, List(2))
-
-  def checkPrime(i: Int):IsPrime = {
-    if (cache.upper >= i) { //already computed
-      val all_primes = cache.primes.filter(_ <= i)
-      if (all_primes.isEmpty) IsPrime(false,List())
-      else if (all_primes.last == i) IsPrime(true, all_primes.dropRight(1))
-      else IsPrime(false, all_primes)
-    } else {
-      IsPrime(isPrime(i))
-    }
-
-  }
-
-  def isPrime(i: Int): Boolean = {
-    if (i <= 1) return false
-    if (i == 2) return true
-    if (i % 2 ==0) return false
-    val bound = Math.sqrt(i)
-    var d = 3
-    while (d <= bound) {
-      if (i % d == 0) return false
-      //choose next d
-      cache.primes.find(_ > d) match {
-        case None => d += 2 //d must be odd number
-        case Some(p) => d = p
-      }
-    }
-    true
-  }
+  implicit val executionContext = context.dispatcher
+  implicit val timeout = Timeout(5 seconds)
+  private var upper = Upper(2)
 
   def receive = {
-    //request from the prime service
     case CheckPrime(i) =>
-      val p=checkPrime(i)
-      if (i>1 && p.primes.isEmpty) pst ! CheckPrime(i)
-      sender ! p
-      
-    //receive from PrimStream actor   
-    case cc: Cache =>
-      if (cache.upper < cc.upper) this.cache = cc
-
+      if (upper.bound < i) { //the number was not computed before
+        val fut = pst ? TellPrime(i)
+        pst ! CheckPrime(i) //send to PrimeStream to compute in the background       
+        fut.mapTo[IsPrime] pipeTo sender       
+      }else {
+        (pst ? GetPrimes(i)).mapTo[IsPrime] pipeTo sender
+      }
+    case u:Upper => this.upper = u 
     case _ =>
   }
 }
@@ -72,7 +48,29 @@ class PrimeStream extends Actor with ActorLogging {
     s.head #:: sieve(s.tail filter (_ % s.head != 0))
 
   //assign primes to a value so it memorizes the computation 
-  val primes = sieve(from(2))  
+  val primes = sieve(from(2)) 
+  
+  def takePrimes(upto:Int) = {
+    primes.takeWhile { _ <= upto }.toList
+  }
+  
+  def isPrime(i: Int): Boolean = {
+    if (i <= 1) return false
+    if (i == 2) return true
+    if (i % 2 ==0) return false
+    val bound = Math.sqrt(i).toInt
+    val test_primes = takePrimes(Math.min(bound,upper)) //only take computed
+    var d = 3    
+    while (d <= bound) {
+      if (i % d == 0) return false
+      //choose next d
+      test_primes.find( _ > d) match {
+        case None => d += 2 //d must be odd number
+        case Some(p) => d = p
+      }
+    }
+    true
+  }
 
   def receive = {
 
@@ -82,12 +80,24 @@ class PrimeStream extends Actor with ActorLogging {
       //println(primes)
       val smaller = primes.takeWhile { _ <= i }.toList
       upper = Math.max(upper, i)
-      sender ! Cache(upper, smaller)
+      //sender ! Cache(upper, smaller)
+      sender ! Upper(upper)
+    case TellPrime(i) if i>1 =>
+      sender ! IsPrime(isPrime(i))
+    case GetPrimes(i) if i>1 =>
+      val all_primes = takePrimes(i)
+      val ps=if (all_primes.isEmpty) IsPrime(false,List())
+        else if (all_primes.last == i) IsPrime(true, all_primes.dropRight(1))
+        else IsPrime(false, all_primes)
+      sender ! ps
     case _ =>
   }
 }
 
 /**
- * case class that contains the largest integer <upper> checked so far and primes less than or equal to the <upper>
+ * case class that contains the largest integer checked so far.
  */
-case class Cache(upper: Int, primes: List[Int])
+case class Upper(bound:Int)
+case class TellPrime(i:Int)
+case class GetPrimes(i:Int)
+

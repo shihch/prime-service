@@ -18,16 +18,16 @@ class PrimeTest extends TestKit(ActorSystem("Testsystem")) with FlatSpecLike wit
   implicit val timeout = Timeout(5 seconds)
 
   it should "compute correct prime numbers" in {
-    assertResult(true)(pc.isPrime(53))
+    assertResult(true)(ps.isPrime(53))
 
     //different way to compute but same prime numbers
     ps.primes.take(100).foreach { p =>
-      assertResult(true)(pc.isPrime(p))
+      assertResult(true)(ps.isPrime(p))
     }
   }
 
   it should "send check prime msg and respond with correct result" in {
-    val future = pcRef ? CheckPrime(15)
+    val future = psRef ? TellPrime(15)
     val Success(result:IsPrime)=future.value.get
     assertResult(false)(result.isPrime)
     

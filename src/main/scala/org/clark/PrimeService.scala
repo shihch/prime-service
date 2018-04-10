@@ -17,7 +17,6 @@ import akka.http.scaladsl.model.ContentTypes
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import spray.json.DefaultJsonProtocol
 import akka.http.scaladsl.model.StatusCodes
-import akka.dispatch.OnFailure
 
 trait JsonSupport extends SprayJsonSupport with DefaultJsonProtocol {
   implicit val itemFormat = jsonFormat2(IsPrime)
@@ -38,7 +37,7 @@ object PrimeService extends App with LazyLogging with JsonSupport{
   val route = 
     pathPrefix("primes"/IntNumber) { target =>
       get {       
-        if (target > 50000) {
+        if (target > 100000) {
           complete("Please give smaller number.")
         }else {
           val future = ask(primeCache,CheckPrime(target)).mapTo[IsPrime]
